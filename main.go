@@ -18,6 +18,8 @@ type InfluxDataPoint string
 type Database struct {
 	http     http.Client
 	c        chan InfluxDataPoint
+	shutdown chan struct{}
+	done     chan struct{}
 	writeURL string
 }
 
@@ -58,10 +60,21 @@ func join_kv(m map[string]interface{}) (s []string, err error) {
 }
 
 func (d Database) run() {
+	var shutdown bool
 	tick := time.NewTicker(1 * time.Second)
 	var data []string
 	for {
+		if shutdown {
+			d.done <- struct{}{}
+			return
+		}
 		select {
+		case _ = <-d.shutdown:
+			close(d.c)
+			for x := range d.c {
+				data = append(data, string(x))
+			}
+			shutdown = true
 		case x := <-d.c:
 			data = append(data, string(x))
 			if len(data) < INFLUX_MAX_BUF {
@@ -76,8 +89,15 @@ func (d Database) run() {
 			log.Printf("Error submitting to influxdb: %s\n", err)
 		} else if response.StatusCode != 204 {
 			log.Printf("Unexpected return code %d: %s submitting to influxdb\n", response.StatusCode, response.Status)
+		} else {
+			data = data[0:0]
 		}
 	}
+}
+
+func (d Database) Finalize() {
+	d.shutdown <- struct{}{}
+	_ = <-d.done
 }
 
 func New(host string, database string) (*Database, error) {
@@ -85,6 +105,9 @@ func New(host string, database string) (*Database, error) {
 		c:        make(chan InfluxDataPoint, INFLUX_MAX_BUF),
 		writeURL: fmt.Sprintf("http://%s:8086/write?db=%s", host, database),
 		http:     http.Client{Timeout: INFLUX_TIMEOUT},
+		done:     make(chan struct{}),
+		shutdown: make(chan struct{}),
 	}
+	go d.run()
 	return &d, nil
 }
