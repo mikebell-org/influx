@@ -23,6 +23,10 @@ type Database struct {
 	writeURL string
 }
 
+func (d Database) NewMetric(name string, tags map[string]interface{}, values map[string]interface{}) Metric {
+	return Metric{d, name, tags, values}
+}
+
 func (d Database) Write(name string, tags map[string]interface{}, values map[string]interface{}) (err error) {
 	tags_list, err := join_kv(tags)
 	if err != nil {
