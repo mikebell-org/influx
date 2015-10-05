@@ -48,12 +48,8 @@ func (d Database) Write(name string, tags map[string]interface{}, values map[str
 
 func join_kv(m map[string]interface{}) (s []string, err error) {
 	var list = make([]string, 0, len(m))
-	for k, v := range m {
+	for key, v := range m {
 		// TODO check for invalid characters in k, v
-		key, err := json.Marshal(k)
-		if err != nil {
-			return nil, err
-		}
 		val, err := json.Marshal(v)
 		if err != nil {
 			return nil, err
@@ -62,6 +58,25 @@ func join_kv(m map[string]interface{}) (s []string, err error) {
 	}
 	return list, nil
 }
+
+/*
+func encode_thing(thing interface{}) (s string, err error) {
+	v := reflect.ValueOf(thing)
+	switch v.Kind() {
+	case reflect.String:
+		s = v.String()
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		s = fmt.Sprintf("%d", v.Uint())
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		s = fmt.Sprintf("%d", v.Int())
+	case reflect.Float32, reflect.Float64:
+		s = fmt.Sprintf("%f", v.Float())
+	default:
+		return "", fmt.Errorf("Unknown kind %s", v.Kind())
+	}
+	return s, nil
+}
+*/
 
 func (d Database) run() {
 	var shutdown bool
