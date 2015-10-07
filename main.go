@@ -23,8 +23,26 @@ type Database struct {
 	writeURL string
 }
 
-func (d Database) NewMetric(name string, tags map[string]interface{}, values map[string]interface{}) Metric {
+func (d Database) NewMetric(name string, hostname string, tags map[string]interface{}, values map[string]interface{}) Metric {
+	if tags == nil {
+		tags = make(map[string]interface{})
+	}
+	tags["hostname"] = hostname
+	tags["type"] = "metric"
 	return Metric{d, name, tags, values}
+}
+
+func (d Database) ErrorReporter(hostname string, tags map[string]interface{}, values map[string]interface{}) ErrorReporter {
+	if tags == nil {
+		tags = make(map[string]interface{})
+	}
+	if values == nil {
+		values = make(map[string]interface{})
+	}
+	tags["hostname"] = hostname
+	tags["type"] = "error"
+	values["value"] = 1
+	return ErrorReporter{d, tags, values}
 }
 
 func (d Database) Write(name string, tags map[string]interface{}, values map[string]interface{}) (err error) {
