@@ -148,3 +148,15 @@ func New(host string, database string) (*Database, error) {
 	go d.run()
 	return &d, nil
 }
+
+func NewRaw(url string) (*Database, error) {
+	d := Database{
+		c:        make(chan InfluxDataPoint, INFLUX_MAX_BUF),
+		writeURL: url,
+		http:     http.Client{Timeout: INFLUX_TIMEOUT},
+		done:     make(chan struct{}),
+		shutdown: make(chan struct{}),
+	}
+	go d.run()
+	return &d, nil
+}
