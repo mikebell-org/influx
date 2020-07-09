@@ -115,10 +115,10 @@ func (d Database) run() {
 		select {
 		case _ = <-d.shutdown:
 			close(d.c)
-			shutdown = true
 			for x := range d.c {
 				data = append(data, string(x))
 			}
+			shutdown = true
 		case x := <-inChannel:
 			data = append(data, string(x))
 			if len(data) < INFLUX_MAX_BUF {
