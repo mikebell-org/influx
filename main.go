@@ -155,6 +155,15 @@ func (d Database) Finalize() {
 	<-d.done
 }
 
+func (d Database) FinalizeTimeout(timeout time.Duration) {
+	d.shutdown <- struct{}{}
+	select {
+	case <-time.After(timeout):
+		log.Println("Influx finalization timed out")
+	case <-d.done:
+	}
+}
+
 func New(host string, database string) (*Database, error) {
 	return NewRaw(fmt.Sprintf("http://%s:8086/write?db=%s", host, database))
 }
