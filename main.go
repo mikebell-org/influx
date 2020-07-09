@@ -2,6 +2,7 @@ package influx
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -155,10 +156,10 @@ func (d Database) Finalize() {
 	<-d.done
 }
 
-func (d Database) FinalizeTimeout(timeout time.Duration) {
+func (d Database) FinalizeCtx(ctx context.Context) {
 	d.shutdown <- struct{}{}
 	select {
-	case <-time.After(timeout):
+	case <-ctx.Done():
 		log.Println("Influx finalization timed out")
 	case <-d.done:
 	}
