@@ -152,8 +152,7 @@ func (d Database) run() {
 }
 
 func (d Database) Finalize() {
-	d.shutdown <- struct{}{}
-	<-d.done
+	d.FinalizeCtx(context.Background())
 }
 
 func (d Database) FinalizeCtx(ctx context.Context) {
