@@ -59,7 +59,7 @@ func (d Database) Write(name string, tags map[string]interface{}, values map[str
 	select {
 	case d.c <- InfluxDataPoint(fmt.Sprintf("%s %s %d", strings.Join(names, ","), strings.Join(values_list, ","), time.Now().UnixNano())):
 	default:
-		return fmt.Errorf("Rejecting data point due to full buffer")
+		return fmt.Errorf("rejecting data point due to full buffer")
 	}
 	return nil
 }
@@ -97,61 +97,71 @@ func encode_thing(thing interface{}) (s string, err error) {
 */
 
 func (d Database) run() {
+	defer close(d.done)
+
 	var shutdown bool
-	tick := time.NewTicker(1 * time.Second)
 	var data []string
+
+	tick := time.NewTicker(1 * time.Second)
 	for {
-		if shutdown {
-			d.done <- struct{}{}
-			return
+		inChannel := d.c
+		if len(data) >= INFLUX_MAX_BUF {
+			// Receiving from nil channel blocks forever
+			// This prevents us from receiving from the d.c channel when our data buffer is already full
+			inChannel = nil
 		}
+
 		select {
 		case _ = <-d.shutdown:
 			close(d.c)
+			shutdown = true
 			for x := range d.c {
 				data = append(data, string(x))
 			}
-			shutdown = true
-		case x := <-d.c:
+		case x := <-inChannel:
 			data = append(data, string(x))
 			if len(data) < INFLUX_MAX_BUF {
 				continue
 			}
 		case _ = <-tick.C:
 		}
+
 		if len(data) == 0 {
+			if shutdown {
+				// We were asked to shutdown and we don't have any data to write
+				return
+			}
+			// Nothing to write
 			continue
 		}
+
 		if response, err := d.http.Post(d.writeURL, "text/line-protocol", bytes.NewBufferString(strings.Join(data, "\n"))); err != nil {
 			log.Printf("Error submitting to influxdb: %s\n", err)
 		} else if response.StatusCode != 204 {
 			log.Printf("Unexpected return code %d: %s submitting to influxdb\n", response.StatusCode, response.Status)
 		} else {
 			data = data[0:0]
+
+			// We were asked to shutdown and we don't have any data to write
+			if shutdown {
+				return
+			}
 		}
 	}
 }
 
 func (d Database) Finalize() {
 	d.shutdown <- struct{}{}
-	_ = <-d.done
+	<-d.done
 }
 
 func New(host string, database string) (*Database, error) {
-	d := Database{
-		c:        make(chan InfluxDataPoint, INFLUX_MAX_BUF),
-		writeURL: fmt.Sprintf("http://%s:8086/write?db=%s", host, database),
-		http:     http.Client{Timeout: INFLUX_TIMEOUT},
-		done:     make(chan struct{}),
-		shutdown: make(chan struct{}),
-	}
-	go d.run()
-	return &d, nil
+	return NewRaw(fmt.Sprintf("http://%s:8086/write?db=%s", host, database))
 }
 
 func NewRaw(url string) (*Database, error) {
 	d := Database{
-		c:        make(chan InfluxDataPoint, INFLUX_MAX_BUF),
+		c:        make(chan InfluxDataPoint), // We don't need to buffer the channel, we already buffer in run()
 		writeURL: url,
 		http:     http.Client{Timeout: INFLUX_TIMEOUT},
 		done:     make(chan struct{}),
